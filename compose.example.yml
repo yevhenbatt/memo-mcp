@@ -1,0 +1,21 @@
+services:
+  memo-mcp:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    init: true
+    networks: [private]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8080), 3); s.close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  private:
+    external: true
