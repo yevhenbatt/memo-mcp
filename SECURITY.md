@@ -10,3 +10,8 @@ deployment.
 Operators must keep Mem0, databases, populated environment files, and
 introspection credentials private. The public MCP endpoint is the only
 intended external surface.
+
+This reference gateway intentionally does not expose a memory-deletion tool.
+Deletion belongs in a separate private administrative workflow with an approval
+record. Multi-user deployments must derive scope from server-side membership;
+the client must never provide it.

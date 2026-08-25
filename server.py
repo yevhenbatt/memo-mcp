@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import os
+import re
 from typing import Any
 
 import httpx
@@ -48,6 +49,8 @@ if not MEM0_API_KEY or not MCP_BEARER_TOKEN or not MEMORY_SCOPE:
     raise RuntimeError("MEM0_API_KEY, MCP_BEARER_TOKEN, and MEMORY_SCOPE must be configured.")
 if OAUTH_ENABLED and (not all(OAUTH_CONFIGURATION) or not PUBLIC_MCP_URL):
     raise RuntimeError("OAuth requires all OAUTH_* settings and PUBLIC_MCP_URL.")
+if not _csv_setting("MCP_ALLOWED_HOSTS"):
+    raise RuntimeError("MCP_ALLOWED_HOSTS must contain the public gateway hostname.")
 
 oauth_subject: contextvars.ContextVar[str | None] = contextvars.ContextVar("oauth_subject", default=None)
 oauth_write_allowed: contextvars.ContextVar[bool] = contextvars.ContextVar("oauth_write_allowed", default=False)
@@ -174,6 +177,16 @@ def _truncate(value: Any) -> str:
     return text if len(text) <= CHARACTER_LIMIT else text[:CHARACTER_LIMIT] + "\n\n[Response truncated.]"
 
 
+def _contains_obvious_secret(value: str) -> bool:
+    """Reject common credential formats before a client can persist them."""
+    patterns = (
+        r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
+        r"\b(?:api[_-]?key|password|client[_-]?secret|access[_-]?token|refresh[_-]?token)\s*[:=]",
+        r"\bauthorization\s*:\s*bearer\s+",
+    )
+    return any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in patterns)
+
+
 async def _mem0_request(method: str, path: str, **kwargs: Any) -> Any:
     try:
         async with httpx.AsyncClient(timeout=45.0) as client:
@@ -205,20 +218,11 @@ async def memo_remember_fact(fact: str) -> str:
     fact = fact.strip()
     if not 1 <= len(fact) <= 2_000:
         return _truncate({"error": "fact must be 1–2,000 characters."})
+    if _contains_obvious_secret(fact):
+        return _truncate({"error": "Do not store credentials, tokens, passwords, or private keys in memory."})
     return _truncate(await _mem0_request("POST", "/memories", json={
         "messages": [{"role": "user", "content": fact}], "user_id": MEMORY_SCOPE, "infer": False,
     }))
-
-
-@mcp.tool(name="memo_forget_memory", annotations={"readOnlyHint": False, "destructiveHint": True})
-async def memo_forget_memory(memory_id: str) -> str:
-    """Permanently delete one memory after explicit out-of-band approval."""
-    if oauth_subject.get() is not None:
-        return _truncate({"error": "Memory deletion is disabled for OAuth clients."})
-    memory_id = memory_id.strip()
-    if len(memory_id) != 36:
-        return _truncate({"error": "memory_id must be a UUID returned by a memory tool."})
-    return _truncate(await _mem0_request("DELETE", f"/memories/{memory_id}"))
 
 
 app = GatewayAuthenticationMiddleware(mcp.streamable_http_app())

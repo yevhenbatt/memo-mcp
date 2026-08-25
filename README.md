@@ -1,11 +1,13 @@
 # memo-mcp
 
 `memo-mcp` is a guarded Streamable HTTP MCP gateway for a private, self-hosted
-Mem0 REST API. It exposes only a small memory-tool surface while keeping Mem0,
-PostgreSQL and internal API credentials off the public network.
+Mem0 REST API. It exposes a small, non-destructive memory-tool surface while
+keeping Mem0, PostgreSQL and internal API credentials off the public network.
 
-It is designed as a reference implementation. You must connect it to your own
-identity and workspace policy before allowing multiple people to use it.
+It is designed as a reference implementation for **one trusted memory scope**.
+Before allowing multiple people to use it, integrate a server-side policy
+adapter that derives the memory scope from authenticated membership. Never let
+a browser or MCP client choose `MEMORY_SCOPE`.
 
 ## Security model
 
@@ -14,8 +16,11 @@ identity and workspace policy before allowing multiple people to use it.
 - Browser clients can use OAuth/OIDC token introspection with exact issuer,
   audience, immutable subject and scope checks.
 - `memo_remember_fact` requires `mem0.write` for OAuth clients.
-- OAuth clients cannot delete memories. Deletion requires an explicitly
-  authorised non-browser path.
+- The gateway deliberately provides no memory-deletion tool. Perform deletion
+  through a separate, private administrative workflow with explicit approval.
+- The gateway rejects common credential and private-key formats before they can
+  be written to memory. This is a safety net, not a replacement for operator
+  policy.
 - A caller must never select its own memory scope. In multi-user deployments,
   a trusted application must derive that scope from server-side membership.
 
@@ -34,13 +39,16 @@ identity and workspace policy before allowing multiple people to use it.
 
 - `memo_search_memory`
 - `memo_remember_fact`
-- `memo_forget_memory` — irreversible; OAuth clients are always denied.
 
 ## Configuration
 
 See `.env.example`. `PUBLIC_MCP_URL`, `MCP_ALLOWED_HOSTS`, and
 `MCP_ALLOWED_ORIGINS` must describe your own HTTPS endpoint. The gateway calls
 the underlying Mem0 API using `X-API-Key`.
+
+`MCP_ALLOWED_HOSTS` is mandatory. The container build context excludes `.env`,
+Git metadata, and local Python artifacts so they cannot be copied to an image
+by accident.
 
 ## Development
 

@@ -15,6 +15,12 @@ class ConfigurationTemplateTests(unittest.TestCase):
         self.assertIn('.env', ignored)
         self.assertNotIn('compose.yml', ignored)
 
+    def test_docker_build_excludes_local_secrets_and_git_history(self):
+        with open('.dockerignore', encoding='utf-8') as handle:
+            ignored = handle.read()
+        self.assertIn('.env', ignored)
+        self.assertIn('.git', ignored)
+
 
 if __name__ == '__main__':
     unittest.main()
